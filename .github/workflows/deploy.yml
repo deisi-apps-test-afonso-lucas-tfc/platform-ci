@@ -1,0 +1,69 @@
+name: Deploy App to K3s
+
+# ============================================
+# DEISI App Template - Deploy Workflow
+#
+# ⚠️ IMPORTANT:
+# This template uses 'workflow_dispatch' by default.
+# After configuring the application, change to:
+#
+# on:
+#   push:
+#     branches:
+#       - main
+#
+# ============================================
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      APP_NAME: ${{ github.event.repository.name }}
+      REPOSITORY_OWNER: ${{ github.repository_owner }}
+      FULL_IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          docker build -t $FULL_IMAGE_NAME:${{ github.sha }} .
+
+      - name: Push Docker image
+        run: |
+          docker push $FULL_IMAGE_NAME:${{ github.sha }}
+
+      - name: Set up kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install $APP_NAME ./helm/app -n deisi \
+            --set app.name=$APP_NAME \
+            --set service.name=$APP_NAME \
+            --set ingress.name=$APP_NAME \
+            --set image.repository=$FULL_IMAGE_NAME \
+            --set image.tag=${{ github.sha }} \
+            --set ingress.host=$APP_NAME.134.122.74.17.nip.io
