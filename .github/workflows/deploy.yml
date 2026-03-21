@@ -94,6 +94,7 @@ jobs:
           helm upgrade --install $APP_NAME ./platform/helm/app -n $NAMESPACE \
             --create-namespace \
             --set namespace=$NAMESPACE \
+            --set env.NODE_ENV=production \
             --set app.name=$APP_NAME \
             --set service.name=$APP_NAME \
             --set ingress.name=$APP_NAME \
