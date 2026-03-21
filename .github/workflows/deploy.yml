@@ -88,6 +88,7 @@ jobs:
       - name: Instalar Helm
         uses: azure/setup-helm@v4
 
+
       - name: Deploy com Helm
         run: |
           helm upgrade --install $APP_NAME ./platform/helm/app -n $NAMESPACE \
@@ -99,4 +100,8 @@ jobs:
             --set service.targetPort=$APP_PORT \
             --set image.repository=$FULL_IMAGE_NAME \
             --set image.tag=${{ github.sha }} \
-            --set ingress.host=$INGRESS_HOST
+            --set ingress.host=$INGRESS_HOST \
+            --set resources.limits.memory=512Mi \
+            --set resources.limits.cpu=500m \
+            --set livenessProbe.initialDelaySeconds=60 \
+            --set readinessProbe.initialDelaySeconds=60

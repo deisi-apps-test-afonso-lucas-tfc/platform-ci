@@ -29,11 +29,8 @@ ingress:
 
 resources:
   requests:
-    memory: "64Mi"
-    cpu: "50m"
+    memory: "256Mi"   
+    cpu: "100m"      
   limits:
-    memory: "256Mi"
-    cpu: "200m"
-
-env:
-  APP_ENV: "production"
+    memory: "512Mi"  
+    cpu: "500m"      
