@@ -1,21 +1,12 @@
-name: Deploy App to K3s
-
-# ============================================
-# DEISI App Template - Deploy Workflow
-#
-# ⚠️ IMPORTANT:
-# This template uses 'workflow_dispatch' by default.
-# After configuring the application, change to:
-#
-# on:
-#   push:
-#     branches:
-#       - main
-#
-# ============================================
+name: Central Deploy
 
 on:
-  workflow_dispatch:
+  workflow_call:
+    secrets:
+      GHCR_TOKEN:
+        required: true
+      KUBECONFIG:
+        required: true
 
 jobs:
   deploy:
@@ -27,43 +18,85 @@ jobs:
 
     env:
       APP_NAME: ${{ github.event.repository.name }}
-      REPOSITORY_OWNER: ${{ github.repository_owner }}
+      BASE_DOMAIN: 134.122.74.17.nip.io
       FULL_IMAGE_NAME: ghcr.io/${{ github.repository }}
+      APP_PORT: 3000
 
     steps:
-      - name: Checkout repository
+      - name: Checkout app repository
         uses: actions/checkout@v4
 
-      - name: Log in to GHCR
+      - name: Ler topics do repositório
+        id: repo_meta
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+
+            core.setOutput("topics", JSON.stringify(repo.topics || []));
+
+      - name: Definir namespace a partir dos topics
+        run: |
+          TOPICS='${{ steps.repo_meta.outputs.topics }}'
+          echo "Topics encontrados: $TOPICS"
+
+          if [[ "$TOPICS" == *"tfc"* ]]; then
+            echo "NAMESPACE=tfc" >> $GITHUB_ENV
+          elif [[ "$TOPICS" == *"deisi"* ]]; then
+            echo "NAMESPACE=deisi" >> $GITHUB_ENV
+          elif [[ "$TOPICS" == *"alunos"* ]]; then
+            echo "NAMESPACE=alunos" >> $GITHUB_ENV
+          else
+            echo "Nenhum topic válido encontrado. Usa um de: tfc, deisi, alunos." >&2
+            exit 1
+          fi
+
+      - name: Definir host automaticamente
+        run: |
+          echo "INGRESS_HOST=${APP_NAME}.${BASE_DOMAIN}" >> $GITHUB_ENV
+
+      - name: Login no GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build Docker image
+      - name: Build da imagem
         run: |
           docker build -t $FULL_IMAGE_NAME:${{ github.sha }} .
 
-      - name: Push Docker image
+      - name: Push da imagem
         run: |
           docker push $FULL_IMAGE_NAME:${{ github.sha }}
 
-      - name: Set up kubeconfig
+      - name: Configurar kubeconfig
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      - name: Set up Helm
+      - name: Checkout do repo platform-ci
+        uses: actions/checkout@v4
+        with:
+          repository: deisi-apps-test-afonso-lucas-tfc/platform-ci
+          path: platform
+
+      - name: Instalar Helm
         uses: azure/setup-helm@v4
 
-      - name: Deploy with Helm
+      - name: Deploy com Helm
         run: |
-          helm upgrade --install $APP_NAME ./helm/app -n deisi \
+          helm upgrade --install $APP_NAME ./platform/helm/app -n $NAMESPACE \
+            --create-namespace \
+            --set namespace=$NAMESPACE \
             --set app.name=$APP_NAME \
             --set service.name=$APP_NAME \
             --set ingress.name=$APP_NAME \
+            --set service.targetPort=$APP_PORT \
             --set image.repository=$FULL_IMAGE_NAME \
             --set image.tag=${{ github.sha }} \
-            --set ingress.host=$APP_NAME.134.122.74.17.nip.io
+            --set ingress.host=$INGRESS_HOST

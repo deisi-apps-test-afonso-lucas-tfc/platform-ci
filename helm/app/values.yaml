@@ -36,4 +36,4 @@ resources:
     cpu: "200m"
 
 env:
-  NODE_ENV: "production"
+  APP_ENV: "production"
