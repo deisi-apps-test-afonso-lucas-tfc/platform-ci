@@ -6,7 +6,7 @@ app:
 replicaCount: 1
 
 image:
-  repository: ghcr.io/repository-owner/repository-name
+  repository: ""
   tag: "latest"
   pullPolicy: Always
 
@@ -17,15 +17,7 @@ service:
   name: app
   type: NodePort
   port: 80
-  targetPort: 3000
-
-ingress:
-  enabled: true
-  name: app
-  className: traefik
-  host: app.134.122.74.17.nip.io
-  path: /
-  pathType: Prefix
+  targetPort: 8000  # <--- Mudei para 8000 porque os teus logs mostram Django
 
 resources:
   requests:
@@ -33,4 +25,7 @@ resources:
     cpu: "100m"      
   limits:
     memory: "512Mi"  
-    cpu: "500m"      
+    cpu: "500m"
+
+env:
+  NODE_ENV: "production"

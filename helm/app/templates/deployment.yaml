@@ -21,8 +21,16 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.service.targetPort }}
+          # Adicionamos isto para todas as apps. Resolve o erro do chmod /data.
+          volumeMounts:
+            - name: data-storage
+              mountPath: /data
           env:
             - name: NODE_ENV
-              value: {{ .Values.env.NODE_ENV | quote }}
+              value: {{ .Values.env.NODE_ENV | default "production" | quote }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
+      # Define o volume ao nível do Pod para todas as apps
+      volumes:
+        - name: data-storage
+          emptyDir: {}
