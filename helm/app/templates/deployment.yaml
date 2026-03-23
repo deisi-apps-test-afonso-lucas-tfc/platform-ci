@@ -13,24 +13,30 @@ spec:
       labels:
         app: {{ .Values.app.name }}
     spec:
+      # SEGURANÇA: Define o dono do volume para o utilizador 1000
+      securityContext:
+        fsGroup: 1000
       imagePullSecrets:
 {{ toYaml .Values.imagePullSecrets | indent 8 }}
       containers:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # SEGURANÇA: Força o container a correr como utilizador comum
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
           ports:
             - containerPort: {{ .Values.service.targetPort }}
-          # Adicionamos isto para todas as apps. Resolve o erro do chmod /data.
+          # PERSISTÊNCIA: Monta sempre o /data para evitar erros de permissão
           volumeMounts:
-            - name: data-storage
-              mountPath: /data
+            - name: storage-volume
+              mountPath: {{ .Values.persistence.path }}
           env:
             - name: NODE_ENV
               value: {{ .Values.env.NODE_ENV | default "production" | quote }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
-      # Define o volume ao nível do Pod para todas as apps
       volumes:
-        - name: data-storage
+        - name: storage-volume
           emptyDir: {}

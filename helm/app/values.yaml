@@ -1,13 +1,8 @@
-# Configurações de Identificação (Serão preenchidas pelo Workflow)
 namespace: default
-
 app:
-  name: app-name
-
-# Escabilidade
+  name: app
 replicaCount: 1
 
-# Configuração da Imagem (Preenchida pelo Workflow)
 image:
   repository: ""
   tag: "latest"
@@ -16,42 +11,22 @@ image:
 imagePullSecrets:
   - name: ghcr-secret
 
-# Configuração de Rede (O targetPort será sobrescrito pelo input do Workflow)
 service:
   type: ClusterIP
-  port: 80           # Porta externa do serviço
-  targetPort: 80     # Porta padrão (O Workflow mudará para 8000, 3000, etc.)
+  port: 80
+  targetPort: 80 # Valor neutro, o Workflow mudará para 8000 ou 3000
 
-# Configuração de Acesso Externo
-ingress:
-  enabled: true
-  className: traefik
-  path: /
-  pathType: Prefix
-  host: ""           # Gerado automaticamente pelo Workflow
-
-# Persistência Genérica (Resolve o erro do chmod /data em qualquer app)
 persistence:
   enabled: true
   path: /data
 
-# Limites de Recursos para evitar crashes do Nó
 resources:
   requests:
-    memory: "256Mi"
-    cpu: "100m"
+    cpu: 100m
+    memory: 256Mi
   limits:
-    memory: "512Mi"
-    cpu: "500m"
+    cpu: 500m
+    memory: 512Mi
 
-# Variáveis de Ambiente Padrão
 env:
   NODE_ENV: "production"
-
-# Probes de Saúde (Damos 60s para a app acordar antes de testar)
-livenessProbe:
-  initialDelaySeconds: 60
-  periodSeconds: 10
-readinessProbe:
-  initialDelaySeconds: 60
-  periodSeconds: 10
