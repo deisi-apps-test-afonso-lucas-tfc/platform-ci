@@ -1,13 +1,19 @@
 name: Central Deploy
+
 on:
   workflow_call:
+    # Inputs que permitem a cada app dizer o que precisa
     inputs:
       targetPort:
+        description: 'Porta interna da aplicação (ex: 8000 para Django, 3000 para Next)'
+        required: false
         type: string
-        default: "80"
+        default: "8000"
       usePersistence:
+        description: 'Ativar volume /data para evitar erros de chmod/sqlite'
+        required: false
         type: boolean
-        default: true
+        default: false
     secrets:
       GHCR_TOKEN:
         required: true
@@ -17,15 +23,21 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
     env:
       APP_NAME: ${{ github.event.repository.name }}
       BASE_DOMAIN: 134.122.74.17.nip.io
       FULL_IMAGE_NAME: ghcr.io/${{ github.repository }}
+
     steps:
-      - name: Checkout
+      - name: Checkout app repository
         uses: actions/checkout@v4
 
-      - name: Get Repo Meta (Topics)
+      - name: Ler topics do repositório
         id: repo_meta
         uses: actions/github-script@v7
         with:
@@ -36,32 +48,72 @@ jobs:
             });
             core.setOutput("topics", JSON.stringify(repo.topics || []));
 
-      - name: Define Namespace
+      - name: Definir namespace a partir dos topics
         run: |
           TOPICS='${{ steps.repo_meta.outputs.topics }}'
-          if [[ "$TOPICS" == *"tfc"* ]]; then echo "NS=tfc" >> $GITHUB_ENV
-          elif [[ "$TOPICS" == *"deisi"* ]]; then echo "NS=deisi" >> $GITHUB_ENV
-          elif [[ "$TOPICS" == *"alunos"* ]]; then echo "NS=alunos" >> $GITHUB_ENV
-          else exit 1; fi
+          echo "Topics encontrados: $TOPICS"
+          if [[ "$TOPICS" == *"tfc"* ]]; then
+            echo "NAMESPACE=tfc" >> $GITHUB_ENV
+          elif [[ "$TOPICS" == *"deisi"* ]]; then
+            echo "NAMESPACE=deisi" >> $GITHUB_ENV
+          elif [[ "$TOPICS" == *"alunos"* ]]; then
+            echo "NAMESPACE=alunos" >> $GITHUB_ENV
+          else
+            echo "Nenhum topic válido encontrado. Usa um de: tfc, deisi, alunos." >&2
+            exit 1
+          fi
 
-      - name: Build & Push
+      - name: Definir host automaticamente
         run: |
-          docker login ghcr.io -u ${{ github.repository_owner }} -p ${{ secrets.GHCR_TOKEN }}
+          echo "INGRESS_HOST=${APP_NAME}.${BASE_DOMAIN}" >> $GITHUB_ENV
+
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build da imagem
+        run: |
           docker build -t $FULL_IMAGE_NAME:${{ github.sha }} .
+
+      - name: Push da imagem
+        run: |
           docker push $FULL_IMAGE_NAME:${{ github.sha }}
 
-      - name: Deploy
+      - name: Configurar kubeconfig
         run: |
-          mkdir -p ~/.kube && echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
-          # Checkout do platform-ci para aceder ao Helm Chart
-          actions/checkout@v4
-          with:
-            repository: deisi-apps-test-afonso-lucas-tfc/platform-ci
-            path: platform
-          
-          helm upgrade --install $APP_NAME ./platform/helm/app -n $NS \
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # Checkout do repositório de plataforma para aceder aos ficheiros Helm
+      - name: Checkout platform-ci repo
+        uses: actions/checkout@v4
+        with:
+          repository: deisi-apps-test-afonso-lucas-tfc/platform-ci
+          path: platform
+          token: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Instalar Helm
+        uses: azure/setup-helm@v4
+
+      - name: Deploy com Helm
+        run: |
+          helm upgrade --install $APP_NAME ./platform/helm/app -n $NAMESPACE \
+            --create-namespace \
+            --set namespace=$NAMESPACE \
+            --set env.NODE_ENV=production \
             --set app.name=$APP_NAME \
+            --set service.name=$APP_NAME \
+            --set ingress.name=$APP_NAME \
             --set service.targetPort=${{ inputs.targetPort }} \
+            --set persistence.enabled=${{ inputs.usePersistence }} \
             --set image.repository=$FULL_IMAGE_NAME \
             --set image.tag=${{ github.sha }} \
-            --set ingress.host=$APP_NAME.$BASE_DOMAIN
+            --set ingress.host=$INGRESS_HOST \
+            --set resources.limits.memory=512Mi \
+            --set resources.limits.cpu=500m \
+            --set livenessProbe.initialDelaySeconds=60 \
+            --set readinessProbe.initialDelaySeconds=60
