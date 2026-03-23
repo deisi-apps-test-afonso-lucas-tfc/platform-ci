@@ -2,6 +2,18 @@ name: Central Deploy
 
 on:
   workflow_call:
+    # Adicionamos inputs para que cada app se configure ao chamar o workflow
+    inputs:
+      targetPort:
+        description: 'Porta interna da aplicação (ex: 8000 para Django, 3000 para Next)'
+        required: false
+        type: string
+        default: "8000"
+      usePersistence:
+        description: 'Ativar volume /data para evitar erros de chmod/sqlite'
+        required: false
+        type: boolean
+        default: false
     secrets:
       GHCR_TOKEN:
         required: true
@@ -20,7 +32,6 @@ jobs:
       APP_NAME: ${{ github.event.repository.name }}
       BASE_DOMAIN: 134.122.74.17.nip.io
       FULL_IMAGE_NAME: ghcr.io/${{ github.repository }}
-      APP_PORT: 3000
 
     steps:
       - name: Checkout app repository
@@ -35,14 +46,12 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo
             });
-
             core.setOutput("topics", JSON.stringify(repo.topics || []));
 
       - name: Definir namespace a partir dos topics
         run: |
           TOPICS='${{ steps.repo_meta.outputs.topics }}'
           echo "Topics encontrados: $TOPICS"
-
           if [[ "$TOPICS" == *"tfc"* ]]; then
             echo "NAMESPACE=tfc" >> $GITHUB_ENV
           elif [[ "$TOPICS" == *"deisi"* ]]; then
@@ -88,7 +97,6 @@ jobs:
       - name: Instalar Helm
         uses: azure/setup-helm@v4
 
-
       - name: Deploy com Helm
         run: |
           helm upgrade --install $APP_NAME ./platform/helm/app -n $NAMESPACE \
@@ -98,7 +106,8 @@ jobs:
             --set app.name=$APP_NAME \
             --set service.name=$APP_NAME \
             --set ingress.name=$APP_NAME \
-            --set service.targetPort=$APP_PORT \
+            --set service.targetPort=${{ inputs.targetPort }} \
+            --set persistence.enabled=${{ inputs.usePersistence }} \
             --set image.repository=$FULL_IMAGE_NAME \
             --set image.tag=${{ github.sha }} \
             --set ingress.host=$INGRESS_HOST \
