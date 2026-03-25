@@ -13,7 +13,7 @@ spec:
       labels:
         app: {{ .Values.app.name }}
     spec:
-      # SEGURANÇA: Define o dono do volume para o utilizador 1000
+      # SEGURANÇA: fsGroup 1000 garante que o volume montado pertence ao utilizador 1000
       securityContext:
         fsGroup: 1000
       imagePullSecrets:
@@ -22,13 +22,11 @@ spec:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # SEGURANÇA: Força o container a correr como utilizador comum
           securityContext:
             runAsUser: 1000
             runAsNonRoot: true
           ports:
             - containerPort: {{ .Values.service.targetPort }}
-          # PERSISTÊNCIA: Monta sempre o /data para evitar erros de permissão
           volumeMounts:
             - name: storage-volume
               mountPath: {{ .Values.persistence.path }}
@@ -39,4 +37,9 @@ spec:
 {{ toYaml .Values.resources | indent 12 }}
       volumes:
         - name: storage-volume
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.app.name }}-pvc
+          {{- else }}
           emptyDir: {}
+          {{- end }}

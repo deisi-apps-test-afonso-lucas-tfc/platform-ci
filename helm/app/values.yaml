@@ -14,11 +14,12 @@ imagePullSecrets:
 service:
   type: ClusterIP
   port: 80
-  targetPort: 80 # Valor neutro, o Workflow mudará para 8000 ou 3000
+  targetPort: 8000 
 
 persistence:
-  enabled: true
-  path: /data
+  enabled: false
+  path: "/app/data" # Caminho padrão onde o volume será montado
+  size: "1Gi"
 
 resources:
   requests:
@@ -30,3 +31,12 @@ resources:
 
 env:
   NODE_ENV: "production"
+
+# Ingress e Probes (Garante que existem para o Helm não falhar)
+ingress:
+  enabled: true
+  host: ""
+livenessProbe:
+  initialDelaySeconds: 60
+readinessProbe:
+  initialDelaySeconds: 60

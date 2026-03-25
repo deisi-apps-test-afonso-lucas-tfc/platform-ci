@@ -2,18 +2,22 @@ name: Central Deploy
 
 on:
   workflow_call:
-    # Inputs que permitem a cada app dizer o que precisa
     inputs:
       targetPort:
-        description: 'Porta interna da aplicação (ex: 8000 para Django, 3000 para Next)'
+        description: 'Porta interna da aplicação'
         required: false
         type: string
         default: "8000"
       usePersistence:
-        description: 'Ativar volume /data para evitar erros de chmod/sqlite'
+        description: 'Ativar volume persistente'
         required: false
         type: boolean
         default: false
+      mountPath:
+        description: 'Caminho onde o volume será montado'
+        required: false
+        type: string
+        default: "/app/data"
     secrets:
       GHCR_TOKEN:
         required: true
@@ -23,11 +27,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
-
     env:
       APP_NAME: ${{ github.event.repository.name }}
       BASE_DOMAIN: 134.122.74.17.nip.io
@@ -51,21 +50,10 @@ jobs:
       - name: Definir namespace a partir dos topics
         run: |
           TOPICS='${{ steps.repo_meta.outputs.topics }}'
-          echo "Topics encontrados: $TOPICS"
-          if [[ "$TOPICS" == *"tfc"* ]]; then
-            echo "NAMESPACE=tfc" >> $GITHUB_ENV
-          elif [[ "$TOPICS" == *"deisi"* ]]; then
-            echo "NAMESPACE=deisi" >> $GITHUB_ENV
-          elif [[ "$TOPICS" == *"alunos"* ]]; then
-            echo "NAMESPACE=alunos" >> $GITHUB_ENV
-          else
-            echo "Nenhum topic válido encontrado. Usa um de: tfc, deisi, alunos." >&2
-            exit 1
-          fi
-
-      - name: Definir host automaticamente
-        run: |
-          echo "INGRESS_HOST=${APP_NAME}.${BASE_DOMAIN}" >> $GITHUB_ENV
+          if [[ "$TOPICS" == *"tfc"* ]]; then echo "NAMESPACE=tfc" >> $GITHUB_ENV
+          elif [[ "$TOPICS" == *"deisi"* ]]; then echo "NAMESPACE=deisi" >> $GITHUB_ENV
+          elif [[ "$TOPICS" == *"alunos"* ]]; then echo "NAMESPACE=alunos" >> $GITHUB_ENV
+          else exit 1; fi
 
       - name: Login no GHCR
         uses: docker/login-action@v3
@@ -74,12 +62,9 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build da imagem
+      - name: Build e Push
         run: |
           docker build -t $FULL_IMAGE_NAME:${{ github.sha }} .
-
-      - name: Push da imagem
-        run: |
           docker push $FULL_IMAGE_NAME:${{ github.sha }}
 
       - name: Configurar kubeconfig
@@ -88,7 +73,6 @@ jobs:
           echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      # Checkout do repositório de plataforma para aceder aos ficheiros Helm
       - name: Checkout platform-ci repo
         uses: actions/checkout@v4
         with:
@@ -96,24 +80,15 @@ jobs:
           path: platform
           token: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Instalar Helm
-        uses: azure/setup-helm@v4
-
       - name: Deploy com Helm
         run: |
           helm upgrade --install $APP_NAME ./platform/helm/app -n $NAMESPACE \
             --create-namespace \
             --set namespace=$NAMESPACE \
-            --set env.NODE_ENV=production \
             --set app.name=$APP_NAME \
-            --set service.name=$APP_NAME \
-            --set ingress.name=$APP_NAME \
-            --set service.targetPort=${{ inputs.targetPort }} \
-            --set persistence.enabled=${{ inputs.usePersistence }} \
             --set image.repository=$FULL_IMAGE_NAME \
             --set image.tag=${{ github.sha }} \
-            --set ingress.host=$INGRESS_HOST \
-            --set resources.limits.memory=512Mi \
-            --set resources.limits.cpu=500m \
-            --set livenessProbe.initialDelaySeconds=60 \
-            --set readinessProbe.initialDelaySeconds=60
+            --set service.targetPort=${{ inputs.targetPort }} \
+            --set persistence.enabled=${{ inputs.usePersistence }} \
+            --set persistence.path=${{ inputs.mountPath }} \
+            --set ingress.host=${{ github.event.repository.name }}.${{ env.BASE_DOMAIN }}
