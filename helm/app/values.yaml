@@ -17,8 +17,8 @@ service:
   targetPort: 8000 
 
 persistence:
-  enabled: false
-  path: "/app/data" # Caminho padrão onde o volume será montado
+  enabled: true
+  path: "/data"  
   size: "1Gi"
 
 resources:

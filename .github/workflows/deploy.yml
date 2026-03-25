@@ -17,7 +17,7 @@ on:
         description: 'Caminho onde o volume será montado'
         required: false
         type: string
-        default: "/app/data"
+        default: "/data"
     secrets:
       GHCR_TOKEN:
         required: true
