@@ -88,9 +88,10 @@ jobs:
             --set app.name=$APP_NAME \
             --set service.name=$APP_NAME \
             --set ingress.name=$APP_NAME \
+            --set ingress.enabled=true \
+            --set ingress.host=$INGRESS_HOST \
             --set image.repository=$FULL_IMAGE_NAME \
             --set image.tag=${{ github.sha }} \
             --set service.targetPort=${{ inputs.targetPort }} \
             --set persistence.enabled=${{ inputs.usePersistence }} \
-            --set persistence.path=${{ inputs.mountPath }} \
-            --set ingress.host=${{ github.event.repository.name }}.${{ env.BASE_DOMAIN }}
+            --set persistence.path=${{ inputs.mountPath }}
