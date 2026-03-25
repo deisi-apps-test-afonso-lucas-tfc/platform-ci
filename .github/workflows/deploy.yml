@@ -86,6 +86,8 @@ jobs:
             --create-namespace \
             --set namespace=$NAMESPACE \
             --set app.name=$APP_NAME \
+            --set service.name=$APP_NAME \
+            --set ingress.name=$APP_NAME \
             --set image.repository=$FULL_IMAGE_NAME \
             --set image.tag=${{ github.sha }} \
             --set service.targetPort=${{ inputs.targetPort }} \
