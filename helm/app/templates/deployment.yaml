@@ -13,30 +13,50 @@ spec:
       labels:
         app: {{ .Values.app.name }}
     spec:
-      # SEGURANÇA: Define o dono do volume para o utilizador 1000
+      # SEGURANÇA: Garante que volumes montados pertencem ao grupo 1000
       securityContext:
         fsGroup: 1000
+
+      # INIT CONTAINER: O "Seguro de Vida" do Cluster
+      # Ele garante que a pasta de dados e a de logs têm permissão antes da app iniciar
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: ["sh", "-c", "chown -R 1000:1000 /app {{ .Values.persistence.path }}"]
+          securityContext:
+            runAsUser: 0 # Precisa de ser root temporariamente para mudar o dono
+          volumeMounts:
+            - name: storage-volume
+              mountPath: {{ .Values.persistence.path }}
+
       imagePullSecrets:
 {{ toYaml .Values.imagePullSecrets | indent 8 }}
+
       containers:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # SEGURANÇA: Força o container a correr como utilizador comum
+          
+          # SEGURANÇA: Bloqueia o uso de root no container principal
           securityContext:
             runAsUser: 1000
             runAsNonRoot: true
+            allowPrivilegeEscalation: false
+
           ports:
             - containerPort: {{ .Values.service.targetPort }}
-          # PERSISTÊNCIA: Monta sempre o /data para evitar erros de permissão
+          
           volumeMounts:
             - name: storage-volume
               mountPath: {{ .Values.persistence.path }}
+          
           env:
             - name: NODE_ENV
               value: {{ .Values.env.NODE_ENV | default "production" | quote }}
+          
           resources:
 {{ toYaml .Values.resources | indent 12 }}
+
       volumes:
         - name: storage-volume
           emptyDir: {}
