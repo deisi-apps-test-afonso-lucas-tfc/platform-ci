@@ -32,11 +32,10 @@ resources:
 env:
   NODE_ENV: "production"
 
-# Ingress e Probes (Garante que existem para o Helm não falhar)
 ingress:
   enabled: true
-  host: ""
-livenessProbe:
-  initialDelaySeconds: 60
-readinessProbe:
-  initialDelaySeconds: 60
+  name: ""       # Será preenchido pelo --set ou pelo default do template
+  className: "nginx"
+  path: "/"
+  pathType: "Prefix"
+  host: ""       # Será preenchido pelo Workflow
