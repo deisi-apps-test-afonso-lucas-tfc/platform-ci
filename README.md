@@ -12,7 +12,6 @@ Template base para adicionar novas aplicações ao cluster K3s do DEISI com:
 * Docker
 * Helm
 * GitHub Actions
-* Deploy automático para o namespace `deisi`
 
 ---
 
