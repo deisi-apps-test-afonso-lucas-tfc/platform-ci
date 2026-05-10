@@ -80,6 +80,15 @@ jobs:
           path: platform
           token: ${{ secrets.GHCR_TOKEN }}
 
+      - name: Criar ImagePullSecret
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+          --docker-server=ghcr.io \
+          --docker-username=${{ github.repository_owner }} \
+          --docker-password=${{ secrets.GHCR_TOKEN }} \
+          -n $NAMESPACE \
+          --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy com Helm
         run: |
           helm upgrade --install $APP_NAME ./platform/helm/app -n $NAMESPACE \
