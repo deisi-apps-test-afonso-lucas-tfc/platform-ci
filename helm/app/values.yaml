@@ -1,15 +1,15 @@
 namespace: default
 app:
   name: app
+  imagePullSecrets:
+    - name: ghcr-secret
+
 replicaCount: 1
 
 image:
   repository: ""
   tag: "latest"
   pullPolicy: Always
-
-imagePullSecrets:
-  - name: ghcr-secret
 
 service:
   type: ClusterIP
@@ -34,8 +34,8 @@ env:
 
 ingress:
   enabled: true
-  name: ""       # Será preenchido pelo --set ou pelo default do template
+  name: ""
   className: "nginx"
   path: "/"
   pathType: "Prefix"
-  host: ""       # Será preenchido pelo Workflow
+  host: ""
