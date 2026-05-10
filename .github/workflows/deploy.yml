@@ -89,6 +89,9 @@ jobs:
           -n $NAMESPACE \
           --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Fix Ingress Host
+        run: echo "INGRESS_HOST=${APP_NAME}.${BASE_DOMAIN}" >> $GITHUB_ENV
+
       - name: Deploy com Helm
         run: |
           helm upgrade --install $APP_NAME ./platform/helm/app -n $NAMESPACE \
